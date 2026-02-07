@@ -51,6 +51,9 @@ export interface GRItem {
   expiryDate: string // Expiry Date (E_DT)
   invoiceNo: string // Invoice Number (I_NO)
   invoiceDate: string // Invoice Date (I_DT)
+  lotNo: string // Auto-generated Lot Number
+  fileUrl?: string // File upload URL
+  fileName?: string // File name
   qrCode?: string // Generated QR Code data
 }
 
@@ -144,8 +147,8 @@ export function P2PProvider({ children }: { children: ReactNode }) {
         id: uuidv4(),
         poId,
         items: items.map((item) => {
-          // Generate QR code data: Product+M_DT+E_DT+I_NO+I_DT
-          const qrData = `${item.itemCode}|${item.manufacturingDate}|${item.expiryDate}|${item.invoiceNo}|${item.invoiceDate}`
+          // Generate QR code data: Product+LotNo+M_DT+E_DT+I_NO+I_DT
+          const qrData = `${item.itemCode}|${item.lotNo}|${item.manufacturingDate}|${item.expiryDate}|${item.invoiceNo}|${item.invoiceDate}`
           return { 
             ...item, 
             id: uuidv4(), 

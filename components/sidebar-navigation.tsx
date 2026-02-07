@@ -38,6 +38,7 @@ const menuItems: SidebarNavItem[] = [
   { id: "create-po", label: "Create PO", icon: <ShoppingCartIcon className="h-5 w-5" /> },
   { id: "approve-po", label: "PO Approval", icon: <CheckCircleIcon className="h-5 w-5" /> },
   { id: "create-gr", label: "Create GR", icon: <TruckIcon className="h-5 w-5" /> },
+  { id: "qa-check", label: "QA Check", icon: <CheckCircleIcon className="h-5 w-5" /> },
   { id: "issue-item", label: "Issue Stock", icon: <ArrowUpRightIcon className="h-5 w-5" /> },
   {
     id: "reports",
@@ -76,8 +77,8 @@ export default function SidebarNavigation({ currentStep, onNavigate }: SidebarNa
       <aside className="hidden md:flex w-64 bg-gradient-to-b from-sky-50 to-blue-50 text-gray-900 flex-col h-screen sticky top-0 border-r border-blue-200 shadow-sm">
         {/* Header */}
         <div className="p-6 border-b border-blue-200">
-          <h1 className="text-xl font-bold text-sky-700">Store Inventory</h1>
-          <p className="text-sm text-sky-600 mt-1">Management Module</p>
+          <h1 className="text-xl font-bold text-white">Store Inventory</h1>
+          <p className="text-sm text-slate-300 mt-1">Management Module</p>
         </div>
 
         {/* Navigation Items */}

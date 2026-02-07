@@ -8,6 +8,7 @@ import PrApprovalScreen from "@/components/pr-approval-screen"
 import PoCreationScreen from "@/components/po-creation-screen"
 import PoApprovalScreen from "@/components/po-approval-screen"
 import GrCreationScreen from "@/components/gr-creation-screen"
+import QACheckScreen from "@/components/qa-check-screen"
 import StockViewScreen from "@/components/stock-view-screen"
 import IssueEntryScreen from "@/components/issue-entry-screen"
 import DashboardScreen from "@/components/dashboard-screen"
@@ -23,6 +24,7 @@ type P2PStep =
   | "create-po"
   | "approve-po"
   | "create-gr"
+  | "qa-check"
   | "view-stock"
   | "issue-item"
   | "view-dashboard"
@@ -83,19 +85,20 @@ export default function P2PCycleProgram() {
               </Card>
             )}
 
-            {currentStep === "create-pr" && <PrCreationScreen onSuccess={handleBackToMainMenu} onBack={handleBackToMainMenu} />}
+            {currentStep === "create-pr" && <PrCreationScreen onBack={handleBackToMainMenu} />}
             {currentStep === "approve-pr" && <PrApprovalScreen onBack={handleBackToMainMenu} onSelectPR={handlePrApproved} />}
             {currentStep === "create-po" && (
-              <PoCreationScreen onSuccess={handleBackToMainMenu} onBack={handleBackToMainMenu} selectedPrForPo={selectedPrForPo} />
+              <PoCreationScreen onBack={handleBackToMainMenu} onSelectPO={handlePoApproved} selectedPrForPo={selectedPrForPo} />
             )}
             {currentStep === "approve-po" && (
-              <PoApprovalScreen onBack={handleBackToMainMenu} onSelectPO={handlePoApproved} />
+              <PoApprovalScreen onBack={handleBackToMainMenu} onSelectPO={handlePoApproved} selectedPoForGr={selectedPoForGr} />
             )}
             {currentStep === "create-gr" && (
               <GrCreationScreen onBack={handleBackToMainMenu} onSuccess={handleBackToMainMenu} selectedPoForGr={selectedPoForGr} />
             )}
+            {currentStep === "qa-check" && <QACheckScreen onBack={handleBackToMainMenu} />}
             {currentStep === "view-stock" && <StockViewScreen onBack={handleBackToMainMenu} />}
-            {currentStep === "issue-item" && <IssueEntryScreen onSuccess={handleBackToMainMenu} onBack={handleBackToMainMenu} />}
+            {currentStep === "issue-item" && <IssueEntryScreen onBack={handleBackToMainMenu} />}
             {currentStep === "view-dashboard" && <DashboardScreen onBack={handleBackToMainMenu} />}
             {currentStep === "view-pr-register" && <PrRegisterScreen onBack={handleBackToMainMenu} />}
             {currentStep === "view-po-register" && <PoRegisterScreen onBack={handleBackToMainMenu} />}

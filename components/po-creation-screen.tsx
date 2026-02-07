@@ -16,7 +16,7 @@ import { ALPHABET_ITEM_CODES, UNIT_OPTIONS, ITEM_CODE_DESCRIPTIONS, VENDOR_OPTIO
 import { numberToWords } from "@/utils/numberToWords"
 
 interface PoCreationScreenProps {
-  onSuccess: () => void
+  onSuccess?: () => void
   onBack: () => void
   selectedPrForPo?: PurchaseRequisition | null
 }
@@ -252,7 +252,9 @@ export default function PoCreationScreen({ onSuccess, onBack, selectedPrForPo }:
       },
     ])
     setDiscountAmount(0)
-    onSuccess()
+    if (onSuccess) {
+      onSuccess()
+    }
   }
 
   return (

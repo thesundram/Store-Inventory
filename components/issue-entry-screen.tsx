@@ -12,7 +12,7 @@ import { useP2P } from "@/context/p2p-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface IssueEntryScreenProps {
-  onSuccess: () => void
+  onSuccess?: () => void
   onBack: () => void // Added onBack prop
 }
 
@@ -47,7 +47,9 @@ export default function IssueEntryScreen({ onSuccess, onBack }: IssueEntryScreen
     })
     setSelectedItemCode("")
     setQuantityToIssue(1)
-    onSuccess()
+    if (onSuccess) {
+      onSuccess()
+    }
   }
 
   return (

@@ -22,6 +22,8 @@ interface GRItemWithAdditionalFields extends Omit<GRItem, "id" | "receivedAt" | 
   orderedQty?: number
   alreadyReceivedQty?: number
   pendingQty?: number
+  fileUrl?: string
+  fileName?: string
 }
 
 export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }: GrCreationScreenProps) {
@@ -32,7 +34,11 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
   const [qrCodeUrls, setQrCodeUrls] = useState<{ [key: string]: string }>({})
   const qrCanvasRefs = useRef<{ [key: string]: HTMLCanvasElement | null }>({})
 
-  // Calculate received quantities for each PO item
+  // Generate auto lot number
+  const generateLotNo = (itemCode: string, index: number): string => {
+    const timestamp = Date.now().toString().slice(-6)
+    return `LT-${itemCode}-${timestamp}-${index}`
+  }
   const getReceivedQuantityForPoItem = (poId: string, poItemId: string): number => {
     return goodsReceipts
       .filter((gr) => gr.poId === poId)
@@ -57,7 +63,7 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
     if (currentPO) {
       // Only show items with pending quantities and default to pending quantity
       const itemsWithPending = currentPO.items
-        .map((poItem) => {
+        .map((poItem, index) => {
           const receivedQty = getReceivedQuantityForPoItem(currentPO.id, poItem.id)
           const pendingQty = poItem.poQuantity - receivedQty
           return {
@@ -73,6 +79,7 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
             expiryDate: "",
             invoiceNo: "",
             invoiceDate: "",
+            lotNo: generateLotNo(poItem.itemCode, index + 1),
           }
         })
         .filter((item) => item.pendingQty && item.pendingQty > 0)
@@ -84,7 +91,19 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
   }, [selectedPoId, currentPO])
 
   const handleItemFieldChange = (index: number, field: keyof GRItemWithAdditionalFields, value: string | number) => {
-    setItemsToReceive((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+    const updatedItems = [...itemsToReceive]
+    updatedItems[index] = { ...updatedItems[index], [field]: value }
+    setItemsToReceive(updatedItems)
+  }
+
+  const handleFileUpload = (index: number, file: File) => {
+    if (file) {
+      // In a real application, you would upload to a server/cloud storage
+      // For now, we'll create a local URL and store the file name
+      const fileUrl = URL.createObjectURL(file)
+      handleItemFieldChange(index, "fileUrl" as keyof GRItemWithAdditionalFields, fileUrl)
+      handleItemFieldChange(index, "fileName" as keyof GRItemWithAdditionalFields, file.name)
+    }
   }
 
   // Generate QR code for an item
@@ -204,6 +223,16 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div className="space-y-2">
+                        <Label htmlFor={`lotNo-${index}`}>Lot No (Auto-Generated)</Label>
+                        <Input
+                          id={`lotNo-${index}`}
+                          type="text"
+                          value={item.lotNo}
+                          readOnly
+                          className="h-10 bg-gray-100"
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor={`receivedQuantity-${index}`}>Received Qty*</Label>
                         <Input
                           id={`receivedQuantity-${index}`}
@@ -261,6 +290,19 @@ export default function GrCreationScreen({ onSuccess, onBack, selectedPoForGr }:
                           required
                           className="h-10"
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`file-${index}`}>Upload Document</Label>
+                        <Input
+                          id={`file-${index}`}
+                          type="file"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileUpload(index, file)
+                          }}
+                          className="h-10"
+                        />
+                        {item.fileName && <p className="text-sm text-gray-600">File: {item.fileName}</p>}
                       </div>
                       <div className="space-y-2 flex items-end">
                         <Button

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ALPHABET_ITEM_CODES, UNIT_OPTIONS, ITEM_CODE_DESCRIPTIONS } from "@/lib/constants"
 
 interface PrCreationScreenProps {
-  onSuccess: () => void
+  onSuccess?: () => void
   onBack: () => void // Added onBack prop
 }
 
@@ -72,7 +72,9 @@ export default function PrCreationScreen({ onSuccess, onBack }: PrCreationScreen
     setMessage({ type: "success", text: "Purchase Requisition created successfully!" })
     setRequestedBy("")
     setItems([{ itemCode: "", itemDescription: "", quantity: 1, unit: "" }])
-    onSuccess()
+    if (onSuccess) {
+      onSuccess()
+    }
   }
 
   return (
