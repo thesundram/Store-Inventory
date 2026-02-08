@@ -61,7 +61,8 @@ export interface StockItem {
   itemCode: string
   itemDescription: string
   unit: string
-  currentStock: number
+  qaPassQty: number // Quantity that passed QA checks
+  damagedQty: number // Damaged stock (QA fail + shelf life fail + expiry fail)
   totalValue: number // Total value of stock for weighted average calculation
   weightedAvgPrice: number // Weighted average price = totalValue / currentStock
 }
@@ -71,6 +72,22 @@ interface GoodsReceipt {
   poId: string
   items: GRItem[]
   createdAt: string
+}
+
+export interface QACheckRecord {
+  id: string
+  lotNo: string
+  itemCode: string
+  itemDescription: string
+  lotQty: number
+  unit: string
+  qaPass: number
+  qaFailDamage: number
+  qcFailShelfLife: number
+  qcFailExpiry: number
+  generalRemark: string
+  checkDate: string
+  status: "Pending" | "Completed"
 }
 
 interface P2PContextType {
@@ -86,6 +103,7 @@ interface P2PContextType {
   rejectPO: (id: string) => void
   createGR: (poId: string, items: Omit<GRItem, "id" | "receivedAt" | "qrCode">[]) => void
   issueItem: (itemCode: string, quantity: number) => void
+  updateStockFromQACheck: (lotNo: string, qaPass: number, qaFailDamage: number, qcFailShelfLife: number, qcFailExpiry: number) => void
 }
 
 const P2PContext = createContext<P2PContextType | undefined>(undefined)
@@ -177,23 +195,24 @@ export function P2PProvider({ children }: { children: ReactNode }) {
             // Calculate new weighted average
             const existingItem = updatedStock[existingItemIndex]
             const newTotalValue = existingItem.totalValue + (grItem.receivedQuantity * itemRate)
-            const newCurrentStock = existingItem.currentStock + grItem.receivedQuantity
-            const newWeightedAvgPrice = newCurrentStock > 0 ? newTotalValue / newCurrentStock : 0
+            const newQaPassQty = existingItem.qaPassQty + grItem.receivedQuantity // Initially all received qty is marked as QA pass pending
+            const newWeightedAvgPrice = newQaPassQty > 0 ? newTotalValue / newQaPassQty : 0
 
             updatedStock[existingItemIndex] = {
               ...existingItem,
-              currentStock: newCurrentStock,
+              qaPassQty: newQaPassQty,
               totalValue: newTotalValue,
               weightedAvgPrice: newWeightedAvgPrice,
             }
           } else {
-            // New stock item
+            // New stock item - all initially in QA pass until QA check is done
             const totalValue = grItem.receivedQuantity * itemRate
             updatedStock.push({
               itemCode: grItem.itemCode,
               itemDescription: poItem?.itemDescription || grItem.itemDescription,
               unit: grItem.unit,
-              currentStock: grItem.receivedQuantity,
+              qaPassQty: grItem.receivedQuantity,
+              damagedQty: 0,
               totalValue: totalValue,
               weightedAvgPrice: itemRate,
             })
@@ -210,26 +229,75 @@ export function P2PProvider({ children }: { children: ReactNode }) {
     setStock((prevStock) => {
       const updatedStock = prevStock.map((item) => {
         if (item.itemCode === itemCode) {
-          const newCurrentStock = Math.max(0, item.currentStock - quantity)
+          // Only allow issuing from QA pass stock
+          if (quantity > item.qaPassQty) {
+            console.log(`[v0] Cannot issue more than QA pass stock available (${item.qaPassQty})`)
+            return item
+          }
+          const newQaPassQty = Math.max(0, item.qaPassQty - quantity)
           // Reduce total value proportionally based on weighted avg price
           const valueReduction = quantity * item.weightedAvgPrice
           const newTotalValue = Math.max(0, item.totalValue - valueReduction)
           return {
             ...item,
-            currentStock: newCurrentStock,
+            qaPassQty: newQaPassQty,
             totalValue: newTotalValue,
             // Weighted avg price remains the same after issue
           }
         }
         return item
       })
-      console.log(
-        `Issued ${quantity} of ${itemCode}. New stock:`,
-        updatedStock.find((s) => s.itemCode === itemCode)?.currentStock,
-      )
+      console.log(`[v0] Issued ${quantity} of ${itemCode}. New QA pass stock:`, updatedStock.find((s) => s.itemCode === itemCode)?.qaPassQty)
       return updatedStock
     })
   }, [])
+
+  const updateStockFromQACheck = useCallback((lotNo: string, qaPass: number, qaFailDamage: number, qcFailShelfLife: number, qcFailExpiry: number) => {
+    // Find the GR item with this lot number to get item details
+    const grItem = goodsReceipts
+      .flatMap((gr) => gr.items)
+      .find((item) => item.lotNo === lotNo)
+    
+    if (!grItem) {
+      console.log("[v0] GR item not found for lot:", lotNo)
+      return
+    }
+
+    const totalFailedQty = qaFailDamage + qcFailShelfLife + qcFailExpiry
+    const totalReceivedQty = qaPass + totalFailedQty
+    
+    console.log("[v0] QA Check Update - Lot:", lotNo, "QA Pass:", qaPass, "Failed:", totalFailedQty, "Total:", totalReceivedQty)
+    
+    setStock((prevStock) => {
+      const updatedStock = prevStock.map((item) => {
+        if (item.itemCode === grItem.itemCode) {
+          // Set QA Pass Qty to the amount that passed QA
+          // Set Damaged Qty to all failed amounts (damage + shelf life + expiry)
+          const newQaPassQty = qaPass
+          const newDamagedQty = qaFailDamage + qcFailShelfLife + qcFailExpiry
+          
+          // Calculate proportional value allocation based on QA pass percentage
+          const passPercentage = qaPass / totalReceivedQty
+          const damagePercentage = totalFailedQty / totalReceivedQty
+          
+          const qaPassValue = item.totalValue * passPercentage
+          const newWeightedAvgPrice = newQaPassQty > 0 ? qaPassValue / newQaPassQty : 0
+          
+          console.log("[v0] Stock Update for", item.itemCode, "- New QA Pass:", newQaPassQty, "New Damaged:", newDamagedQty)
+          
+          return {
+            ...item,
+            qaPassQty: newQaPassQty,
+            damagedQty: newDamagedQty,
+            totalValue: qaPassValue, // Update total value to only QA pass stock
+            weightedAvgPrice: newWeightedAvgPrice,
+          }
+        }
+        return item
+      })
+      return updatedStock
+    })
+  }, [goodsReceipts])
 
   return (
     <P2PContext.Provider
@@ -246,6 +314,7 @@ export function P2PProvider({ children }: { children: ReactNode }) {
         rejectPO,
         createGR,
         issueItem,
+        updateStockFromQACheck,
       }}
     >
       {children}

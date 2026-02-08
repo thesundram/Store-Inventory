@@ -22,7 +22,7 @@ export default function IssueEntryScreen({ onSuccess, onBack }: IssueEntryScreen
   const [quantityToIssue, setQuantityToIssue] = useState(1)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  const availableStockItems = stock.filter((item) => item.currentStock > 0)
+  const availableStockItems = stock.filter((item) => item.qaPassQty > 0)
   const selectedStockItem = stock.find((item) => item.itemCode === selectedItemCode)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -35,8 +35,8 @@ export default function IssueEntryScreen({ onSuccess, onBack }: IssueEntryScreen
       setMessage({ type: "error", text: "Quantity to issue must be a positive number." })
       return
     }
-    if (selectedStockItem && quantityToIssue > selectedStockItem.currentStock) {
-      setMessage({ type: "error", text: `Cannot issue more than available stock (${selectedStockItem.currentStock}).` })
+    if (selectedStockItem && quantityToIssue > selectedStockItem.qaPassQty) {
+      setMessage({ type: "error", text: `Cannot issue more than Quality Pass stock available (${selectedStockItem.qaPassQty}). Damaged stock cannot be issued.` })
       return
     }
 
@@ -74,7 +74,7 @@ export default function IssueEntryScreen({ onSuccess, onBack }: IssueEntryScreen
                 )}
                 {availableStockItems.map((item) => (
                   <SelectItem key={item.itemCode} value={item.itemCode}>
-                    {item.itemCode} - {item.itemDescription} (Stock: {item.currentStock} {item.unit})
+                    {item.itemCode} - {item.itemDescription} (QA Pass: {item.qaPassQty} {item.unit})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -82,22 +82,37 @@ export default function IssueEntryScreen({ onSuccess, onBack }: IssueEntryScreen
           </div>
 
           {selectedStockItem && (
-            <div className="space-y-2">
-              <Label htmlFor="quantityToIssue">Quantity to Issue</Label>
-              <Input
-                id="quantityToIssue"
-                type="number"
-                placeholder="e.g., 10"
-                min="1"
-                max={selectedStockItem.currentStock}
-                value={quantityToIssue}
-                onChange={(e) => setQuantityToIssue(Number(e.target.value))}
-                required
-                className="h-10"
-              />
-              <p className="text-sm text-gray-500">
-                Available: {selectedStockItem.currentStock} {selectedStockItem.unit}
-              </p>
+            <div className="space-y-4 bg-sky-50 p-4 rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-100 p-3 rounded-md">
+                  <p className="text-sm font-semibold text-green-700">Quality Pass Qty</p>
+                  <p className="text-xl font-bold text-green-700">{selectedStockItem.qaPassQty.toFixed(2)} {selectedStockItem.unit}</p>
+                </div>
+                <div className="bg-red-100 p-3 rounded-md">
+                  <p className="text-sm font-semibold text-red-700">Damaged Stock</p>
+                  <p className="text-xl font-bold text-red-700">{selectedStockItem.damagedQty.toFixed(2)} {selectedStockItem.unit}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantityToIssue">Quantity to Issue (from Quality Pass Stock)</Label>
+                <Input
+                  id="quantityToIssue"
+                  type="number"
+                  placeholder="e.g., 10"
+                  min="1"
+                  max={selectedStockItem.qaPassQty}
+                  value={quantityToIssue}
+                  onChange={(e) => setQuantityToIssue(Number(e.target.value))}
+                  required
+                  className="h-10"
+                />
+                <p className="text-sm text-gray-600 font-semibold">
+                  Available for issue: {selectedStockItem.qaPassQty} {selectedStockItem.unit}
+                </p>
+                <p className="text-xs text-red-600">
+                  Note: Damaged stock ({selectedStockItem.damagedQty} {selectedStockItem.unit}) cannot be issued.
+                </p>
+              </div>
             </div>
           )}
         </CardContent>

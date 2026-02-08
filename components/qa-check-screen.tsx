@@ -15,46 +15,103 @@ interface QACheckScreenProps {
 }
 
 export default function QACheckScreen({ onBack }: QACheckScreenProps) {
-  const { goodsReceipts } = useP2P()
-  const [selectedGrId, setSelectedGrId] = useState<string>("")
-  const [qaStatus, setQaStatus] = useState<"Pending" | "Passed" | "Failed">("Pending")
-  const [qaComments, setQaComments] = useState<string>("")
+  const { goodsReceipts, updateStockFromQACheck } = useP2P()
+  const [selectedLotNo, setSelectedLotNo] = useState<string>("")
+  const [qaPass, setQaPass] = useState<number>(0)
+  const [qaFailDamage, setQaFailDamage] = useState<number>(0)
+  const [qcFailShelfLife, setQcFailShelfLife] = useState<number>(0)
+  const [qcFailExpiry, setQcFailExpiry] = useState<number>(0)
+  const [generalRemark, setGeneralRemark] = useState<string>("")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [qaRecords, setQaRecords] = useState<
     Array<{
-      grId: string
-      grItemCount: number
-      qaStatus: "Pending" | "Passed" | "Failed"
-      qaDate: string
-      qaComments: string
+      lotNo: string
+      itemCode: string
+      itemDescription: string
+      lotQty: number
+      unit: string
+      qaPass: number
+      qaFailDamage: number
+      qcFailShelfLife: number
+      qcFailExpiry: number
+      generalRemark: string
+      checkDate: string
     }>
   >([])
 
-  const selectedGR = goodsReceipts.find((gr) => gr.id === selectedGrId)
+  // Get all lots that haven't been QA checked yet
+  const allGRItems = goodsReceipts.flatMap((gr) =>
+    gr.items.map((item) => ({
+      ...item,
+      grId: gr.id,
+    })),
+  )
+
+  const uncheckedLots = allGRItems.filter(
+    (item) => !qaRecords.some((record) => record.lotNo === item.lotNo),
+  )
+
+  const selectedLot = uncheckedLots.find((item) => item.lotNo === selectedLotNo)
+  const totalQty = qaPass + qaFailDamage + qcFailShelfLife + qcFailExpiry
+  const isValid = selectedLot && totalQty === selectedLot.receivedQuantity
+  const isQtyMismatch = selectedLot && totalQty > 0 && totalQty !== selectedLot.receivedQuantity
 
   const handleQASubmit = () => {
-    if (!selectedGrId || !qaStatus) {
-      setMessage({ type: "error", text: "Please select a GR and QA Status" })
+    if (!selectedLotNo) {
+      setMessage({ type: "error", text: "Please select a Lot No" })
+      return
+    }
+
+    if (!selectedLot) {
+      setMessage({ type: "error", text: "Selected lot not found" })
+      return
+    }
+
+    if (totalQty !== selectedLot.receivedQuantity) {
+      setMessage({
+        type: "error",
+        text: `Total Qty (${totalQty}) must equal Lot Qty (${selectedLot.receivedQuantity})`,
+      })
+      return
+    }
+
+    if (!generalRemark.trim()) {
+      setMessage({ type: "error", text: "Please enter a General Remark" })
       return
     }
 
     const qaRecord = {
-      grId: selectedGrId,
-      grItemCount: selectedGR?.items.length || 0,
-      qaStatus,
-      qaDate: new Date().toISOString().split("T")[0],
-      qaComments,
+      lotNo: selectedLot.lotNo,
+      itemCode: selectedLot.itemCode,
+      itemDescription: selectedLot.itemDescription,
+      lotQty: selectedLot.receivedQuantity,
+      unit: selectedLot.unit,
+      qaPass,
+      qaFailDamage,
+      qcFailShelfLife,
+      qcFailExpiry,
+      generalRemark,
+      checkDate: new Date().toISOString().split("T")[0],
     }
 
     setQaRecords([...qaRecords, qaRecord])
-    setMessage({ type: "success", text: `QA Check completed for GR ${selectedGrId.substring(0, 8)}...` })
-    setSelectedGrId("")
-    setQaStatus("Pending")
-    setQaComments("")
+    
+    // Update stock based on QA check results
+    updateStockFromQACheck(selectedLot.lotNo, qaPass, qaFailDamage, qcFailShelfLife, qcFailExpiry)
+    
+    setMessage({ type: "success", text: `QA Check completed for Lot ${selectedLot.lotNo}` })
+
+    // Reset form
+    setSelectedLotNo("")
+    setQaPass(0)
+    setQaFailDamage(0)
+    setQcFailShelfLife(0)
+    setQcFailExpiry(0)
+    setGeneralRemark("")
   }
 
   return (
-    <Card className="w-full max-w-4xl">
+    <Card className="w-full max-w-6xl">
       <CardHeader className="bg-gradient-to-r from-sky-600 to-blue-600 text-white rounded-t-lg py-6">
         <CardTitle>QA Check</CardTitle>
         <CardDescription className="text-blue-100">
@@ -64,81 +121,151 @@ export default function QACheckScreen({ onBack }: QACheckScreenProps) {
       <CardContent className="p-6 space-y-6">
         {/* QA Check Form */}
         <div className="space-y-4">
-          <h3 className="font-semibold text-lg">QA Inspection Details</h3>
+          <h3 className="font-semibold text-lg">Quality Assurance Inspection</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="gr-select">Select Goods Receipt*</Label>
-              <Select value={selectedGrId} onValueChange={setSelectedGrId}>
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Select a GR to inspect" />
-                </SelectTrigger>
-                <SelectContent>
-                  {goodsReceipts.map((gr) => (
-                    <SelectItem key={gr.id} value={gr.id}>
-                      GR {gr.id.substring(0, 8)}... ({gr.items.length} items)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="qa-status">QA Status*</Label>
-              <Select value={qaStatus} onValueChange={(value) => setQaStatus(value as any)}>
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Select QA status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Passed">Passed</SelectItem>
-                  <SelectItem value="Failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
+          {/* Lot Selection */}
           <div className="space-y-2">
-            <Label htmlFor="qa-comments">QA Comments</Label>
-            <textarea
-              id="qa-comments"
-              placeholder="Enter QA inspection notes, observations, or reasons for failure..."
-              value={qaComments}
-              onChange={(e) => setQaComments(e.target.value)}
-              rows={4}
-              className="w-full p-2 border border-gray-300 rounded-lg h-24 text-sm"
-            />
+            <Label htmlFor="lot-select">Select Lot No (Not Yet QA Passed)*</Label>
+            <Select value={selectedLotNo} onValueChange={setSelectedLotNo}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Select a Lot No to inspect" />
+              </SelectTrigger>
+              <SelectContent>
+                {uncheckedLots.length === 0 ? (
+                  <SelectItem value="no-lots" disabled>
+                    All lots completed QA check
+                  </SelectItem>
+                ) : (
+                  uncheckedLots.map((item) => (
+                    <SelectItem key={item.lotNo} value={item.lotNo}>
+                      {item.lotNo} - {item.itemCode} ({item.receivedQuantity} {item.unit})
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
-          {selectedGR && (
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-semibold mb-2">Selected GR Details:</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+          {/* Selected Lot Details */}
+          {selectedLot && (
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-600">Items</p>
-                  <p className="font-semibold">{selectedGR.items.length}</p>
+                  <p className="text-gray-600 font-medium">Lot No</p>
+                  <p className="font-semibold text-gray-900">{selectedLot.lotNo}</p>
                 </div>
                 <div>
-                  <p className="text-gray-600">Total Qty</p>
-                  <p className="font-semibold">
-                    {selectedGR.items.reduce((sum, item) => sum + item.receivedQuantity, 0).toFixed(2)}
+                  <p className="text-gray-600 font-medium">Item Code</p>
+                  <p className="font-semibold text-gray-900">{selectedLot.itemCode}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600 font-medium">Lot Qty</p>
+                  <p className="font-semibold text-gray-900">
+                    {selectedLot.receivedQuantity} {selectedLot.unit}
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-600">Received Date</p>
-                  <p className="font-semibold">{new Date(selectedGR.createdAt).toLocaleDateString()}</p>
+                  <p className="text-gray-600 font-medium">Total Entered</p>
+                  <p className={`font-semibold ${totalQty === selectedLot.receivedQuantity ? "text-green-700" : "text-red-700"}`}>
+                    {totalQty} {selectedLot.unit}
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
+          {/* QA Check Quantities */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="qa-pass">QA Pass (Qty)*</Label>
+              <Input
+                id="qa-pass"
+                type="number"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                value={qaPass || ""}
+                onChange={(e) => setQaPass(Number(e.target.value) || 0)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qa-fail-damage">QA Fail - Damage (Qty)*</Label>
+              <Input
+                id="qa-fail-damage"
+                type="number"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                value={qaFailDamage || ""}
+                onChange={(e) => setQaFailDamage(Number(e.target.value) || 0)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qc-fail-shelf">QC Fail - Shelf Life (Qty)*</Label>
+              <Input
+                id="qc-fail-shelf"
+                type="number"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                value={qcFailShelfLife || ""}
+                onChange={(e) => setQcFailShelfLife(Number(e.target.value) || 0)}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qc-fail-expiry">QC Fail - Expiry (Qty)*</Label>
+              <Input
+                id="qc-fail-expiry"
+                type="number"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                value={qcFailExpiry || ""}
+                onChange={(e) => setQcFailExpiry(Number(e.target.value) || 0)}
+                className="h-10"
+              />
+            </div>
+          </div>
+
+          {/* Validation Message */}
+          {selectedLot && totalQty > 0 && isQtyMismatch && (
+            <div className="p-3 bg-red-50 border border-red-300 rounded-lg">
+              <p className="text-sm text-red-700">
+                <span className="font-semibold">Validation Error:</span> Total quantity ({totalQty}) must equal
+                Lot quantity ({selectedLot.receivedQuantity})
+              </p>
+            </div>
+          )}
+
+          {/* General Remark */}
+          <div className="space-y-2">
+            <Label htmlFor="general-remark">General Remark*</Label>
+            <textarea
+              id="general-remark"
+              placeholder="Enter QA inspection notes, observations, or reasons for failures..."
+              value={generalRemark}
+              onChange={(e) => setGeneralRemark(e.target.value)}
+              rows={3}
+              className="w-full p-2 border border-gray-300 rounded-lg h-20 text-sm font-sans"
+            />
+          </div>
+
+          {/* Message */}
           {message && (
-            <p className={`text-sm ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <p className={`text-sm font-medium ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
               {message.text}
             </p>
           )}
 
-          <Button onClick={handleQASubmit} className="w-full bg-sky-600 hover:bg-sky-700">
+          {/* Submit Button */}
+          <Button
+            onClick={handleQASubmit}
+            disabled={!selectedLot || !isValid}
+            className="w-full bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Complete QA Check
           </Button>
         </div>
@@ -151,33 +278,47 @@ export default function QACheckScreen({ onBack }: QACheckScreenProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>GR ID</TableHead>
-                    <TableHead className="text-center">Items</TableHead>
-                    <TableHead>QA Status</TableHead>
-                    <TableHead>QA Date</TableHead>
-                    <TableHead>Comments</TableHead>
+                    <TableHead>Lot No</TableHead>
+                    <TableHead>Item Code</TableHead>
+                    <TableHead className="text-right">Lot Qty</TableHead>
+                    <TableHead className="text-right">QA Pass</TableHead>
+                    <TableHead className="text-right">Fail - Damage</TableHead>
+                    <TableHead className="text-right">Fail - Shelf Life</TableHead>
+                    <TableHead className="text-right">Fail - Expiry</TableHead>
+                    <TableHead>Remark</TableHead>
+                    <TableHead>Check Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {qaRecords.map((record, index) => (
                     <TableRow key={index}>
-                      <TableCell className="font-mono text-sm">{record.grId.substring(0, 8)}...</TableCell>
-                      <TableCell className="text-center">{record.grItemCount}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            record.qaStatus === "Passed"
-                              ? "bg-green-100 text-green-800"
-                              : record.qaStatus === "Failed"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {record.qaStatus}
+                      <TableCell className="font-mono text-sm">{record.lotNo}</TableCell>
+                      <TableCell className="font-medium">{record.itemCode}</TableCell>
+                      <TableCell className="text-right">
+                        {record.lotQty} {record.unit}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-semibold">
+                          {record.qaPass}
                         </span>
                       </TableCell>
-                      <TableCell>{record.qaDate}</TableCell>
-                      <TableCell className="text-sm text-gray-600">{record.qaComments || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-semibold">
+                          {record.qaFailDamage}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm font-semibold">
+                          {record.qcFailShelfLife}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-semibold">
+                          {record.qcFailExpiry}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600 max-w-xs truncate">{record.generalRemark}</TableCell>
+                      <TableCell className="text-sm">{record.checkDate}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
